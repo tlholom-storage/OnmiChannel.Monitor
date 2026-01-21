@@ -40,7 +40,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        var hubUrl = "https://net-core-omni-channel-client-hub.azurewebsites.net/logHub";//"https://localhost:7178/logHub";
+        var hubUrl = "/logHub";
         if (string.IsNullOrWhiteSpace(hubUrl))
             throw new InvalidOperationException("SignalR:LogHubUrl is not configured");
 
