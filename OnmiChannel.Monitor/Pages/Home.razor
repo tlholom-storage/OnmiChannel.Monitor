@@ -1,0 +1,98 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.SignalR.Client
+@inject IConfiguration Configuration
+@implements IAsyncDisposable
+
+<PageTitle>System Logs</PageTitle>
+
+<div class="log-page">
+    <header class="log-header">
+        <h2>System Log Monitor</h2>
+        <span class="log-status @(IsConnected ? "connected" : "disconnected")">
+            @(IsConnected ? "LIVE" : "DISCONNECTED")
+        </span>
+    </header>
+
+    <div class="log-container">
+        @if (_logs.Count == 0)
+        {
+            <div class="log-empty">Waiting for logs...</div>
+        }
+        else
+        {
+            @foreach (var log in _logs)
+            {
+                <div class="log-entry @GetLogClass(log)">
+                    <span class="log-time">@DateTime.Now:HH:mm:ss</span>
+                    <span class="log-message">@log</span>
+                </div>
+            }
+
+        }
+    </div>
+</div>
+
+@code {
+    private HubConnection? _hubConnection;
+    private readonly List<string> _logs = new();
+    private bool IsConnected;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var hubUrl = "https://net-core-omni-channel-client-hub.azurewebsites.net/logHub";//"https://localhost:7178/logHub";
+        if (string.IsNullOrWhiteSpace(hubUrl))
+            throw new InvalidOperationException("SignalR:LogHubUrl is not configured");
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(hubUrl)
+            .WithAutomaticReconnect()
+            .Build();
+
+
+        _hubConnection.On<string>("ReceiveSystemLog", log =>
+        {
+            _logs.Insert(0, log);
+            InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.Reconnecting += _ =>
+        {
+            IsConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        _hubConnection.Reconnected += _ =>
+        {
+            IsConnected = true;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        await _hubConnection.StartAsync();
+        IsConnected = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private string GetLogClass(string log)
+    {
+        if (log.Contains("CRITICAL", StringComparison.OrdinalIgnoreCase))
+            return "log-critical";
+
+        if (log.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
+            return "log-error";
+
+        if (log.Contains("WARN", StringComparison.OrdinalIgnoreCase))
+            return "log-warn";
+
+        return "log-info";
+    }
+}
